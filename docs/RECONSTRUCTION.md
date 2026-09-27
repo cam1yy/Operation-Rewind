@@ -238,47 +238,47 @@ Two further judgement calls worth reviewing:
 
 ## 8. Verification status
 
+Everything below runs in CI on every push — see `.github/workflows/build.yml`.
+
 | Check | Status |
 |---|---|
-| All 8 translation units compile against the **real** Windows headers (`windows.h`, `setupapi.h`, `devpropdef.h`, `unknwn.h`, `winsvc.h`, `winreg.h`) for an `x86_64-windows` target, `-Wall -Wextra`, zero warnings | done — `tests/build_mingw.sh` |
-| Links into a real x64 PE (`PE32+`, machine `0x8664`) | done |
-| Export directory: nine undecorated names on ordinals 1–9, ordinal base 1, module name `GFSDK_Aftermath_Lib.x64.dll` | done — `tests/dump_exports.py` |
-| Exported functions emitted in the same relative order as the original binary | done — `@9, @5, @6, @7, @4, @2, @3, @1, @8`, i.e. `0x4CC0 < 0x4E40 < 0x51D0 < 0x53D0 < 0x5550 < 0x5570 < 0x5580 < 0x5590 < 0x55A0` |
-| Parses with no toolchain at all (stub headers, `-Wall -Wextra`) | done — `tests/syntax_check.sh` |
-| Public header valid C89 and self contained | done — same script |
-| `sizeof(ContextHandleImpl) == 0x18` | done — `static_assert` |
-| MSVC v143 x64 build | **not run here** — no Windows SDK in this environment; use `GFSDK_Aftermath_Lib.sln` or the CMake build |
-| Behaviour against a real NVIDIA driver | needs hardware |
+| **MSVC v143, x64, `GFSDK_Aftermath_Lib.sln`, Release and Debug** | **builds clean** (`windows-latest`, MSBuild located with `vswhere`) |
+| MSVC v143, x64, CMake build | builds clean |
+| Export directory: nine undecorated names on ordinals 1–9, ordinal base 1, module name `GFSDK_Aftermath_Lib.x64.dll` | matches — `tests/dump_exports.py` |
+| Exported functions emitted in the original's relative order | matches for the `.vcxproj` build — `--check-layout` |
+| Smoke test on the built DLL: every export resolves by name *and* by ordinal, all entry points return `FAIL_NotInitialized` before init, the one-shot guard makes the second `Initialize` return `Success` | passes — `tests/smoke_test.cpp` |
+| All 8 TUs compile against the real Windows headers (`windows.h`, `setupapi.h`, `devpropdef.h`, `unknwn.h`, `winsvc.h`, `winreg.h`) for `x86_64-windows`, `-Wall -Wextra`, zero warnings | passes — `tests/build_mingw.sh` |
+| Links into a real x64 PE with mingw-w64 too | passes |
+| Parses with no toolchain at all (stub headers) | passes — `tests/syntax_check.sh` |
+| Public header valid C89 and self contained | passes |
+| `sizeof(ContextHandleImpl) == 0x18` | `static_assert` |
+| Behaviour against a real NVIDIA driver | needs hardware — not covered |
 
-Two independent checks are provided because they answer different questions:
+### What the function layout tells us
 
-* `tests/build_mingw.sh` needs a cross compiler (`x86_64-w64-mingw32-g++`, or set
-  `CXX="zig c++ -target x86_64-windows-gnu"`). It compiles against the genuine Win32
-  headers, links, and verifies the produced export table — so it catches wrong argument
-  types, wrong constants, missing `_WIN32_WINNT` gates and export-table mistakes. It does
-  **not** prove the MSVC build: the CRT and a handful of header details differ.
-* `tests/syntax_check.sh` needs nothing but a host C++ compiler and type checks the
-  sources against the stub headers in `tests/win32-shim/`.
-
-Neither is a substitute for building the solution on Windows, which is the one remaining
-step.
-
-### Export-table evidence
+`tests/dump_exports.py --check-layout` requires the nine exports to sit in the same
+relative order as in the original image:
 
 ```
-ordinal  name                                          rva
-1        GFSDK_Aftermath_DX11_CreateContextHandle      0x00002960
-2        GFSDK_Aftermath_DX11_Initialize               0x000028E0
-3        GFSDK_Aftermath_DX12_CreateContextHandle      0x00002930
-4        GFSDK_Aftermath_DX12_Initialize               0x00002890
-5        GFSDK_Aftermath_GetData                       0x00001C00
-6        GFSDK_Aftermath_GetDeviceStatus               0x00002490
-7        GFSDK_Aftermath_GetPageFaultInformation       0x00002770
-8        GFSDK_Aftermath_ReleaseContextHandle          0x00002990
-9        GFSDK_Aftermath_SetEventMarker                0x00001960
+@9 SetEventMarker  <  @5 GetData  <  @6 GetDeviceStatus  <  @7 GetPageFaultInformation
+                   <  @4 DX12_Initialize  <  @2 DX11_Initialize
+                   <  @3 DX12_CreateContextHandle  <  @1 DX11_CreateContextHandle
+                   <  @8 ReleaseContextHandle
+
+original:  0x4CC0 < 0x4E40 < 0x51D0 < 0x53D0 < 0x5550 < 0x5570 < 0x5580 < 0x5590 < 0x55A0
 ```
 
-Sorted by address that is `@9, @5, @6, @7, @4, @2, @3, @1, @8` — the same sequence as
-`0x180004CC0 … 0x1800055A0` in the original. The five wrapper thunks are larger here than
-the 0x10-byte ones in the shipping DLL simply because this verification build is not
-compiled with `/O2` tail-call merging.
+Both the MSBuild/`.vcxproj` build and the mingw cross build reproduce it, which is decent
+evidence that `src/aftermath_api.cpp` holds its definitions in the same order as the
+original translation unit. It is a property of the code generation settings rather than
+of the sources, though: the same code built with CMake's stock Release flags comes out in
+export-name order (`@1, @2, @3, @4, @5, @6, @7, @8, @9`) because the COMDATs are laid out
+differently. That is why the check is opt-in.
+
+### What is still not proven
+
+* Behaviour against a real driver. Everything past `nvapi_QueryInterface` needs an
+  NVIDIA GPU; CI only exercises the paths that stop before NVAPI is touched.
+* The three inferred `.rdata` constants of §7.
+* Byte-for-byte equivalence of the generated code. That was never the goal — the goal is
+  a rebuild that is functionally identical and readable.

@@ -1,5 +1,7 @@
 # Operation Rewind — `GFSDK_Aftermath_Lib.x64.dll`
 
+[![build](https://github.com/cam1yy/Operation-Rewind/actions/workflows/build.yml/badge.svg)](https://github.com/cam1yy/Operation-Rewind/actions/workflows/build.yml)
+
 A compilable Visual Studio 2022 (v143, x64) project that rebuilds NVIDIA's Nsight
 Aftermath shim from decompiler output (Hex-Rays + Ghidra + Binary Ninja). The three
 listings were reconciled function by function, stripped of decompiler artefacts, and
@@ -22,6 +24,7 @@ src/compat/ida_defs.h            IDA <defs.h> replacements for MSVC (for further
 
 docs/RECONSTRUCTION.md           method, type recovery, quirks kept, deviations, open items
 docs/SYMBOL_MAP.md               every sub_XXXXXXXX and global -> name -> file
+\.github/workflows/build.yml      CI: MSVC v143 build + smoke test on Windows, cross build on Linux
 tests/build_mingw.sh             non-Windows: real cross build + export-table verification
 tests/dump_exports.py            parses a built DLL's export directory and checks it
 tests/smoke_test.cpp             Windows: verifies the export table and pre-init behaviour
@@ -105,19 +108,24 @@ tests/syntax_check.sh    # no cross compiler needed: g++ -fsyntax-only + stub he
 
 ## Status
 
+Every row below is checked by CI on each push
+([`.github/workflows/build.yml`](.github/workflows/build.yml)):
+
 | Check | Result |
 |---|---|
-| 8 TUs compile against the real Windows headers for an x86_64 target (`-Wall -Wextra`) | clean |
-| Links into an x64 PE (`PE32+`, machine `0x8664`) | yes |
-| Export directory: 9 names, ordinals 1–9, undecorated, module name `GFSDK_Aftermath_Lib.x64.dll` | matches |
-| Exported functions laid out in the same relative order as the original | matches (`@9, @5, @6, @7, @4, @2, @3, @1, @8`) |
-| `sizeof(ContextHandleImpl) == 0x18` | `static_assert`, holds |
+| **MSVC v143 / x64 build of `GFSDK_Aftermath_Lib.sln`, Release *and* Debug** | **builds clean** |
+| MSVC v143 / x64 build via CMake | builds clean |
+| Export directory: 9 names, ordinals 1–9, undecorated, module `GFSDK_Aftermath_Lib.x64.dll` | matches |
+| Exported functions laid out in the original's relative order (`@9, @5, @6, @7, @4, @2, @3, @1, @8`) | matches for the `.vcxproj` build |
+| Smoke test: all 9 exports resolve by name **and** by ordinal; every entry point reports `FAIL_NotInitialized`; the one-shot init guard behaves as documented | passes |
+| 8 TUs compile against the real Windows headers for x86_64 (mingw-w64, `-Wall -Wextra`) | clean |
+| Parses with no toolchain at all (stub headers) | clean |
 | Public header valid as C89 and self contained | yes |
-| **MSVC v143 build** | **not run here** — no Windows SDK in this environment |
+| `sizeof(ContextHandleImpl) == 0x18` | `static_assert`, holds |
+| Behaviour against a real NVIDIA driver | needs hardware — not covered |
 
-The cross build uses the mingw-w64 headers and CRT, so it does not prove the MSVC build;
-what it does prove is that every Win32 type, constant and signature is used correctly, and
-that the export table comes out identical to the original's.
+The Windows job uploads the built `GFSDK_Aftermath_Lib.x64.dll`, `.lib` and `.pdb` as a
+run artifact.
 
 Three `.rdata` constants (two GUIDs and a `DEVPROPKEY`) were inferred from their use
 because the supplied listings covered `.text` only; they are listed with their evidence in
