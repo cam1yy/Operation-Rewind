@@ -12,8 +12,9 @@
 ; _GFSDK_Aftermath_GetData and friends with __cdecl decoration, hence the explicit
 ; ordinals here -- they keep the table stable whatever the target.)
 ;
-LIBRARY "GFSDK_Aftermath_Lib.x64.dll"
-
+; No LIBRARY statement: the export directory's module name then comes from the linker's
+; output name, which the project sets to GFSDK_Aftermath_Lib.x64.dll.
+;
 EXPORTS
     GFSDK_Aftermath_DX11_CreateContextHandle    @1
     GFSDK_Aftermath_DX11_Initialize             @2
