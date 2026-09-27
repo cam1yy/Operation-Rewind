@@ -1,0 +1,83 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # The real thing: MSVC v143, x64, both the .sln and the CMake build, followed by the
+  # export-table check and the behaviour smoke test.
+  windows-msvc:
+    name: MSVC v143 (x64)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate MSBuild
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild `
+                                -find MSBuild\**\Bin\MSBuild.exe | Select-Object -First 1
+          if (-not $msbuild) { throw "MSBuild not found" }
+          Write-Host "MSBuild: $msbuild"
+          "MSBUILD=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build the Visual Studio solution (Release|x64)
+        shell: pwsh
+        run: '& "$env:MSBUILD" GFSDK_Aftermath_Lib.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal'
+
+      - name: Build the Visual Studio solution (Debug|x64)
+        shell: pwsh
+        run: '& "$env:MSBUILD" GFSDK_Aftermath_Lib.sln /p:Configuration=Debug /p:Platform=x64 /m /v:minimal'
+
+      - name: Verify the export table of the solution build
+        run: python tests/dump_exports.py build/x64/Release/GFSDK_Aftermath_Lib.x64.dll
+
+      - name: Configure with CMake
+        run: cmake -S . -B cmake-build-ci -G "Visual Studio 17 2022" -A x64 -DGFSDK_AFTERMATH_BUILD_TESTS=ON
+
+      - name: Build with CMake (Release)
+        run: cmake --build cmake-build-ci --config Release
+
+      - name: Verify the export table of the CMake build
+        run: python tests/dump_exports.py cmake-build-ci/Release/GFSDK_Aftermath_Lib.x64.dll
+
+      - name: Smoke test (exports + pre-initialisation behaviour)
+        run: ./cmake-build-ci/Release/smoke_test.exe cmake-build-ci/Release/GFSDK_Aftermath_Lib.x64.dll
+
+      - name: Report the import table
+        shell: pwsh
+        run: |
+          $dumpbin = Get-ChildItem -Path "${env:ProgramFiles}\Microsoft Visual Studio" -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue |
+                     Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
+          if ($dumpbin) { & $dumpbin.FullName /imports build\x64\Release\GFSDK_Aftermath_Lib.x64.dll }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GFSDK_Aftermath_Lib.x64
+          path: |
+            build/x64/Release/GFSDK_Aftermath_Lib.x64.dll
+            build/x64/Release/GFSDK_Aftermath_Lib.x64.pdb
+            build/x64/Release/GFSDK_Aftermath_Lib.x64.lib
+
+  # Host-side checks that need no Windows: a stub-header parse and a genuine cross build
+  # against the mingw-w64 headers, both ending in the export-table verification.
+  linux-crosscheck:
+    name: Cross build + stub-header parse
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse every translation unit against the stub Win32 headers
+        run: tests/syntax_check.sh
+
+      - name: Install a Windows cross compiler
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64
+
+      - name: Cross build an x64 PE and verify its export table
+        run: CXX=x86_64-w64-mingw32-g++ tests/build_mingw.sh

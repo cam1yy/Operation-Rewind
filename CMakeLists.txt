@@ -77,3 +77,20 @@ if(MSVC)
     set_property(TARGET GFSDK_Aftermath_Lib PROPERTY
                  MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
+
+# ---------------------------------------------------------------------------------------
+# Optional: the export-table / pre-initialisation smoke test (tests/smoke_test.cpp).
+# It loads the DLL with LoadLibrary, so it needs no import library and no GPU.
+# ---------------------------------------------------------------------------------------
+option(GFSDK_AFTERMATH_BUILD_TESTS "Build tests/smoke_test.cpp" OFF)
+
+if(GFSDK_AFTERMATH_BUILD_TESTS)
+    add_executable(smoke_test tests/smoke_test.cpp)
+    target_include_directories(smoke_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    set_target_properties(smoke_test PROPERTIES CXX_STANDARD 14 CXX_STANDARD_REQUIRED ON)
+    add_dependencies(smoke_test GFSDK_Aftermath_Lib)
+
+    enable_testing()
+    add_test(NAME smoke_test
+             COMMAND smoke_test $<TARGET_FILE:GFSDK_Aftermath_Lib>)
+endif()
