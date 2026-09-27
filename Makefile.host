@@ -46,7 +46,7 @@ LIB_OBJS  := $(patsubst %.cpp,$(OBJDIR)/%.o,$(LIB_SRCS))
 TEST_OBJS := $(patsubst %.cpp,$(OBJDIR)/%.o,$(TEST_SRCS))
 ALL_OBJS  := $(LIB_OBJS) $(TEST_OBJS)
 
-.PHONY: all test clean c-compat
+.PHONY: all test clean c-compat wincheck artifacts exports
 
 all: $(BIN)
 
@@ -65,7 +65,37 @@ $(CCOMPAT_OBJ): $(CCOMPAT_SRC)
 	$(CC) -std=c99 -Wall -Wextra -Werror -Iinclude -c $< -o $@
 	@echo "  ok    public headers compile as C99"
 
-test: $(BIN) c-compat
+# -----------------------------------------------------------------------------
+# wincheck
+#
+#   Type-check the Windows-only branches -- the #ifndef AFTERMATH_TEST_BUILD
+#   code that the smoke test never compiles -- against a minimal stand-in for
+#   <windows.h>.  This is the code MSVC compiles, so catching a typo here is
+#   worth more than catching it in the IDE.
+# -----------------------------------------------------------------------------
+wincheck:
+	@for f in $(LIB_SRCS); do \
+	    $(CXX) $(CXXFLAGS_NOWINTEST) -fsyntax-only $$f || exit 1; \
+	done
+	@echo "  ok    Windows branches type-check (windows_shim)"
+
+CXXFLAGS_NOWINTEST := -std=c++17 -Iinclude -Isrc -Itests/windows_shim \
+                     -Wall -Wextra -Werror -Wno-unused-parameter -fsyntax-only
+
+# -----------------------------------------------------------------------------
+# scripts
+#
+#   artifacts : no decompiler identifier survives into compiled code.
+#   exports   : exports.def and aftermath_exports.cpp agree, and the set is the
+#               nine recovered names in the recovered order.
+# -----------------------------------------------------------------------------
+artifacts:
+	@./tests/check_artifacts.sh
+
+exports:
+	@./tests/check_exports.sh
+
+test: $(BIN) c-compat wincheck artifacts exports
 	@./$(BIN)
 
 clean:

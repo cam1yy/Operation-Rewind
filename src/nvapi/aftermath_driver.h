@@ -1,117 +1,104 @@
 // =============================================================================
 //  aftermath_driver.h
 // -----------------------------------------------------------------------------
-//  Typed wrappers over the NVAPI Aftermath interfaces.
+//  Typed wrappers over the thirteen recovered NVAPI thunks.
 //
-//  Every public entry point of the DLL funnels into one of these.  They are the
-//  functions that the recovery pass identified as the pair of thunks per
-//  feature:
+//  Every public entry point of the DLL funnels into one of these.  The
+//  signatures below are no longer guesses: each one comes from the call site
+//  that the corresponding thunk is reached from, and the id each thunk passes
+//  to nvapi_QueryInterface is listed in nvapi_ids.h.
 //
-//      [D] set event marker   : D3D11 thunk, D3D12 thunk
-//      [D] get data           : D3D11 thunk, D3D12 thunk
-//      [D] get device status  : D3D11 thunk, D3D12 thunk
-//      [D] page fault info    : ids 0x0BBA25D7 / 0x6446BEB8
-//
-//  The argument lists below are the ones visible at the call sites -- the thunk
-//  bodies simply forward their parameters, so the arity and the types are
-//  recovered even though the driver side contract itself is private.  The
-//  FUNCTION POINTER TYPES are [I]: NVAPI returns an untyped void*, and the
-//  original casts it inline at each call site.  Declaring the cast explicitly
-//  here is what makes the reconstruction readable, and it is the only place
-//  where a wrong guess would have to be corrected.
-//
-//  Return values are GFSDK_Aftermath_Result codes as reported by the driver.
-//  The public layer maps them to the documented failure set (see
-//  aftermath_api.cpp); the driver is free to return codes this build does not
-//  know, which become GFSDK_Aftermath_Result_FAIL_Unknown.
+//  Return values are DRIVER statuses (see aftermath::nvapi::DriverStatus), not
+//  public GFSDK_Aftermath_Result codes.  The caller maps them with
+//  MapDriverStatus(); a thunk returns DriverStatus_Unavailable (-3) when the
+//  interface could not be resolved at all.
 // =============================================================================
 
 #ifndef AFTERMATH_DRIVER_H
 #define AFTERMATH_DRIVER_H
 
 #include <stdint.h>
+
 #include "../../include/GFSDK_Aftermath_Defines.h"
 #include "../aftermath_internal.h"
 
 namespace aftermath
 {
     // -------------------------------------------------------------------------
-    // DriverInitialize
+    // Attach
     //
-    //   Called once, after the feature flags have been recorded.  The driver
-    //   attaches to the device and prepares its tracking resources.
+    //   NVAPI_ID_D3D11_ATTACH / NVAPI_ID_D3D12_ATTACH.
+    //
+    //   Tells the driver about a D3D object and asks it for a handle:
+    //
+    //       status = Attach(api, pD3DObject, &driverHandle);
+    //
+    //   Called twice per object in the recovered code:
+    //     * once from Initialize() with the device;
+    //     * once from CreateContextHandle() with the command list / device
+    //       context, which is the call that actually registers the context.
+    //
+    //   `pDriverHandleOut` is written on success.
     // -------------------------------------------------------------------------
-    GFSDK_Aftermath_Result DriverInitialize(
-        Api             api,
-        void*           pDevice,
-        uint32_t        version,
-        uint32_t        flags);
+    int32_t Attach(Api api, void* pD3DObject, void** pDriverHandleOut);
 
     // -------------------------------------------------------------------------
-    // DriverSetEventMarker
+    // EnableFeatures
     //
-    //   pContext is a raw D3D11 device context or D3D12 command list -- NOT a
-    //   GFSDK_Aftermath_ContextHandle.  The handle's pDriverState field is
-    //   passed alongside so the driver can keep its own per-context bookkeeping
-    //   owned by the caller rather than by the driver.  [I]
+    //   NVAPI_ID_D3D11_ENABLE_FEATURES / NVAPI_ID_D3D12_ENABLE_FEATURES.
+    //   Initialize() only: turns the GFSDK_Aftermath_FeatureFlags mask into
+    //   driver-side tracking.
     // -------------------------------------------------------------------------
-    GFSDK_Aftermath_Result DriverSetEventMarker(
-        Api             api,
-        void*           pContext,
-        void*           pDriverState,
-        const void*     pMarkerData,
-        uint32_t        markerDataSize);
+    int32_t EnableFeatures(Api api, void* driverHandle, uint32_t featureFlags);
 
     // -------------------------------------------------------------------------
-    // DriverGetData
+    // SetEventMarker
     //
-    //   Reads back the marker data of one context.  On success the driver
-    //   supplies the marker blob and its size; the caller (GetData) owns the
-    //   result and fills in the status word.
+    //   NVAPI_ID_*_SET_EVENT_MARKER.  Note the first argument: the DRIVER
+    //   HANDLE taken from the context handle, not the D3D context pointer.
+    //   There is no size limit and no null-marker test in the recovered code.
     // -------------------------------------------------------------------------
-    GFSDK_Aftermath_Result DriverGetData(
-        Api             api,
-        void*           pContext,
-        void*           pDriverState,
-        const void**    ppMarkerData,
-        uint32_t*       pMarkerSize,
-        uint32_t*       pContextStatus);
+    int32_t SetEventMarker(Api      api,
+                           void*    driverHandle,
+                           const void* pMarkerData,
+                           uint32_t markerDataSize);
 
     // -------------------------------------------------------------------------
-    // DriverGetDeviceStatus
+    // GetData
     //
-    //   pDeviceStatus receives the raw driver status, which
-    //   GFSDK_Aftermath_GetDeviceStatus() then maps onto the public
-    //   GFSDK_Aftermath_Device_Status enumeration.
+    //   NVAPI_ID_*_GET_DATA.  The driver writes the marker blob pointer, its
+    //   size and a GFSDK_Aftermath_Context_Status word directly into the
+    //   caller's context-data entry:
+    //
+    //       status = GetData(api, driverHandle,
+    //                        &entry.markerData, &entry.markerSize, &entry.status);
     // -------------------------------------------------------------------------
-    GFSDK_Aftermath_Result DriverGetDeviceStatus(
-        Api             api,
-        void*           pDevice,
-        uint32_t*       pDeviceStatus);
+    int32_t GetData(Api      api,
+                    void*    driverHandle,
+                    void**   ppMarkerData,
+                    uint32_t* pMarkerSize,
+                    uint32_t* pContextStatus);
 
     // -------------------------------------------------------------------------
-    // DriverGetPageFaultInformation
+    // GetDeviceStatus
     //
-    //   pPageFaultInfo is the caller's GFSDK_Aftermath_PageFaultInformation*,
-    //   handed to the driver untouched -- the library never dereferences it and
-    //   therefore cannot know its layout.
+    //   Tries NVAPI_ID_D3D11_DEVICE_STATUS first and falls back to
+    //   NVAPI_ID_D3D12_DEVICE_STATUS.  Returns whichever status the driver
+    //   produced; see GetDeviceStatus() in aftermath_core.cpp for how the two
+    //   are combined.
     // -------------------------------------------------------------------------
-    GFSDK_Aftermath_Result DriverGetPageFaultInformation(
-        Api             api,
-        void*           pDevice,
-        void*           pPageFaultInfo);
+    int32_t GetDeviceStatusPrimary(void* driverHandle, uint32_t* pStatusOut);
+    int32_t GetDeviceStatusFallback(void* driverHandle, uint32_t* pStatusOut);
 
     // -------------------------------------------------------------------------
-    // DriverReleaseContext / DriverReleaseDevice
+    // GetPageFaultInformation
     //
-    //   Release any per-context or per-device state the driver holds.  [I] the
-    //   recovered GFSDK_Aftermath_ReleaseContextHandle() only frees the handle
-    //   object itself, which implies the driver does not require an explicit
-    //   per-context teardown call in this revision; these are provided for the
-    //   shutdown path discovered in DllMain's counterpart.
+    //   Same primary/fallback arrangement with
+    //   NVAPI_ID_PAGE_FAULT_PRIMARY / NVAPI_ID_PAGE_FAULT_FALLBACK.  The second
+    //   call is only made when the first reports a failure.
     // -------------------------------------------------------------------------
-    void DriverReleaseContext(Api api, void* pContext, void* pDriverState);
-    void DriverReleaseDevice(Api api, void* pDevice);
+    int32_t GetPageFaultInformationPrimary(void* driverHandle, void* pInfoOut);
+    int32_t GetPageFaultInformationFallback(void* driverHandle, void* pInfoOut);
 }
 
 #endif // AFTERMATH_DRIVER_H

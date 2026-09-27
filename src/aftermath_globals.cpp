@@ -3,10 +3,9 @@
 // -----------------------------------------------------------------------------
 //  The library's mutable state.
 //
-//  The original binary keeps these in .data at the addresses noted in
-//  aftermath_internal.h.  They are gathered into one translation unit here so
-//  that the initialisation order is obvious and so that the shutdown path has a
-//  single place to reset from.
+//  The image keeps these in .data at the addresses noted in
+//  aftermath_internal.h.  They are gathered into one translation unit so the
+//  layout is auditable at a glance.
 // =============================================================================
 
 #include "aftermath_internal.h"
@@ -14,42 +13,42 @@
 namespace aftermath
 {
     // -------------------------------------------------------------------------
-    // [D] 0x18002029C -- one-time process initialisation interlock.
+    // [D] 0x18001B9D8 -- driver call refcount.
     //
-    //   Zero-initialised in the image, i.e. OneTimeInit_NotStarted.  The
-    //   loader's caching layer performs the equivalent job of the interlock
-    //   today; see nvapi/nvapi_loader.cpp.  Keeping the variable makes the
-    //   state observable for the shutdown path and documents the original
-    //   layout.
+    //   Every NVAPI thunk does `_InterlockedAdd(dword_18001B9D8, 1)` on entry
+    //   and `_InterlockedAdd(dword_18001B9D8, -1)` before returning.
     // -------------------------------------------------------------------------
-    uint32_t g_oneTimeInitState = OneTimeInit_NotStarted;
+    volatile int32_t g_driverRefCount = 0;
 
     // -------------------------------------------------------------------------
-    // [D] 0x1800202A0 -- the device that was passed to the most recent
-    //     successful Initialize().  Only one device is supported at a time; a
-    //     second successful initialization replaces this pointer.
+    // [D] 0x18002029C -- the Initialize() guard.
+    //
+    //   Zero-initialised in the image.  Set to 1 by the compare-exchange inside
+    //   Initialize() and never reset -- see the long note in
+    //   aftermath_internal.h for why that matters.
     // -------------------------------------------------------------------------
-    void* g_pDevice = nullptr;
+    uint32_t g_initGuard = 0;
 
     // -------------------------------------------------------------------------
-    // [D] 0x1800202A8 -- the GFSDK_Aftermath_FeatureFlags of the successful
-    //     Initialize().  Read by SetEventMarker (bit 0), GetData (bit 0) and
-    //     GetPageFaultInformation (bit 1); every other bit is stored and
-    //     forwarded to the driver but never inspected by this library.
+    // [D] 0x1800202A0 -- the DRIVER HANDLE for the device.
+    //
+    //   This is written by the device Attach call inside Initialize(), not by
+    //   the caller's device pointer.  GetDeviceStatus() and
+    //   GetPageFaultInformation() pass it straight back to the driver.
+    // -------------------------------------------------------------------------
+    void* g_deviceDriverHandle = nullptr;
+
+    // -------------------------------------------------------------------------
+    // [D] 0x1800202A8 -- the feature flags of the successful Initialize().
+    //
+    //   Read by SetEventMarker (bit 0), GetData (bit 0) and
+    //   GetPageFaultInformation (bit 1).  Every other bit is stored and
+    //   forwarded to the driver but never inspected by this library.
     // -------------------------------------------------------------------------
     uint32_t g_featureFlags = 0;
 
     // -------------------------------------------------------------------------
     // [D] 0x1800202AC -- "a successful Initialize() has happened".
-    //
-    //   Every entry point except the two Initialize flavours tests this byte
-    //   first and answers GFSDK_Aftermath_Result_FAIL_NotInitialized when it is
-    //   clear.
     // -------------------------------------------------------------------------
     bool g_initialized = false;
-
-    // -------------------------------------------------------------------------
-    // [I] See aftermath_internal.h.
-    // -------------------------------------------------------------------------
-    Api g_activeApi = Api_D3D11;
 }

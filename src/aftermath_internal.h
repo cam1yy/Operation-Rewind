@@ -2,19 +2,15 @@
 //  aftermath_internal.h
 // -----------------------------------------------------------------------------
 //  Internal declarations shared by the reconstruction.  Nothing in this header
-//  is exported; it exists so that the implementation files can be split the way
-//  the original binary was structured instead of being one large translation
-//  unit.
+//  is exported.
 //
-//  Provenance tags used throughout the reconstruction:
+//  Provenance tags used throughout:
 //
-//    [D]  Recovered from the disassembly (address or immediate value recorded
-//         during analysis).
-//    [H]  Taken from the published GFSDK_Aftermath header; the DLL's behaviour
-//         is consistent with it.
-//    [I]  Inferred.  The behaviour is required for the DLL to work, but the
-//         exact original construction could not be confirmed from the listing.
-//         Every [I] is listed in docs/ANALYSIS_NOTES.md under "Open questions".
+//    [D]  Recovered from the listing.  Every address and immediate quoted in
+//         this tree is now taken directly from the decompiled source rather
+//         than inferred.
+//    [H]  Taken from the published Aftermath header.
+//    [I]  Inferred.  Listed in docs/ANALYSIS_NOTES.md under "Open questions".
 // =============================================================================
 
 #ifndef AFTERMATH_INTERNAL_H
@@ -23,112 +19,140 @@
 #include "../include/GFSDK_Aftermath.h"
 
 // -----------------------------------------------------------------------------
-// Calling convention for the private NVAPI entry points.
+// Interlocked primitives.
 //
-//   x64 has a single convention, so this is a no-op in practice; it is spelled
-//   out because the driver side interfaces are C linkage and the intent should
-//   survive a recompile on another architecture.  GCC/Clang do not have the
-//   keyword, hence the shim.
+//   The original uses _InterlockedAdd and _InterlockedCompareExchange.  The GCC
+//   builtins are used off Windows so the host test can exercise the same code.
 // -----------------------------------------------------------------------------
 #if defined(_MSC_VER)
-#  define AFTERMATH_CDECL __cdecl
+#  include <intrin.h>
+#  define AFTERMATH_INTERLOCKED_INC(ptr) \
+       _InterlockedIncrement(reinterpret_cast<volatile long*>(ptr))
+#  define AFTERMATH_INTERLOCKED_DEC(ptr) \
+       _InterlockedDecrement(reinterpret_cast<volatile long*>(ptr))
+#  define AFTERMATH_INTERLOCKED_CAS(ptr, exchange, comparand) \
+       _InterlockedCompareExchange(reinterpret_cast<volatile long*>(ptr), \
+                                   (exchange), (comparand))
 #else
-#  define AFTERMATH_CDECL
+#  define AFTERMATH_INTERLOCKED_INC(ptr) __sync_add_and_fetch((ptr), 1)
+#  define AFTERMATH_INTERLOCKED_DEC(ptr) __sync_sub_and_fetch((ptr), 1)
+#  define AFTERMATH_INTERLOCKED_CAS(ptr, exchange, comparand) \
+       __sync_val_compare_and_swap((ptr), (comparand), (exchange))
 #endif
 
-// -----------------------------------------------------------------------------
-// Global state
-//
-//   The original binary keeps all mutable state in the .data section of the
-//   image.  The offsets below are the ones observed in the listing; the names
-//   are the ones used by this reconstruction.
-//
-//     [D] dword_18002029C  0x18002029C   one-time init state
-//     [D] qword_1800202A0  0x1800202A0   device pointer (ID3D11Device*/ID3D12Device*)
-//     [D] dword_1800202A8  0x1800202A8   GFSDK_Aftermath_FeatureFlags
-//     [D] byte_1800202AC   0x1800202AC   "initialized" flag
-// -----------------------------------------------------------------------------
 namespace aftermath
 {
-    // [D] dword_18002029C -- guards the one-time process initialization
-    //     (nvapi64.dll discovery and driver interface resolution).  The listing
-    //     shows the classic three-state interlock: 0 = not started,
-    //     1 = in progress, 2 = done.
-    enum OneTimeInitState : uint32_t
-    {
-        OneTimeInit_NotStarted = 0,
-        OneTimeInit_InProgress = 1,
-        OneTimeInit_Done       = 2
-    };
+    // -------------------------------------------------------------------------
+    // Global state.
+    //
+    //   The image keeps all mutable state in .data.  Note that two of the four
+    //   Aftermath globals are NOT what a first reading suggests:
+    //
+    //     [D] 0x18001B9D8  dword_18001B9D8   driver call refcount, bumped by
+    //                                        every NVAPI thunk
+    //     [D] 0x18002029C  dword_18002029C   Initialize() guard -- see the very
+    //                                        important note below
+    //     [D] 0x1800202A0  qword_1800202A0   the driver handle for the DEVICE
+    //                                        (not the device pointer!)
+    //     [D] 0x1800202A8  dword_1800202A8   GFSDK_Aftermath_FeatureFlags
+    //     [D] 0x1800202AC  byte_1800202AC    "initialized" flag
+    // -------------------------------------------------------------------------
 
+    // [D] 0x18001B9D8 -- incremented before and decremented after every driver
+    //     call, in all thirteen thunks.  It serialises driver calls against
+    //     whatever the loader's busy flag coordinates, and is never read
+    //     anywhere else in the image.
+    extern volatile int32_t g_driverRefCount;
+
+    // [D] 0x18002029C -- the Initialize() guard.
+    //
+    //     ------------------------------------------------------------------
+    //     This is NOT a one-time-init interlock, despite looking like one.
+    //     The recovered code is:
+    //
+    //         if ( _InterlockedCompareExchange(&dword_18002029C, 1, 0) == 0
+    //              || byte_1800202AC != 0 )
+    //         {
+    //             ... the real initialisation ...
+    //         }
+    //         return 1;                     // success either way
+    //
+    //     Two consequences, both reproduced here:
+    //
+    //       1. The value is set to 1 and never reset.  A second
+    //          GFSDK_Aftermath_*_Initialize() call therefore takes the
+    //          `byte_1800202AC != 0` branch only if the first one succeeded;
+    //          if the first one FAILED, every later call falls straight through
+    //          to `return 1` and reports success without doing anything.
+    //
+    //       2. On failure the function still returns 1
+    //          (GFSDK_Aftermath_Result_Success) from that leaf, because the
+    //          fall-through return is unconditional.  Only the early `return`
+    //          statements inside the guarded block produce failure codes.
+    //     ------------------------------------------------------------------
+    extern uint32_t g_initGuard;
+
+    // [D] 0x1800202A0 -- the driver handle produced by the device Attach call in
+    //     Initialize(), NOT the ID3D11Device*/ID3D12Device* the caller passed.
+    extern void* g_deviceDriverHandle;
+
+    // [D] 0x1800202A8 -- the feature flags of the successful Initialize().
+    extern uint32_t g_featureFlags;
+
+    // [D] 0x1800202AC -- "a successful Initialize() has happened".
+    //     Every entry point except Initialize() itself tests this byte first.
+    extern bool g_initialized;
+
+    // -------------------------------------------------------------------------
     // Per-API selector.  Every public entry point that comes in a DX11 and a
-    // DX12 flavour forwards to a common implementation with this argument
-    // pinned.  [D] see the DX11/DX12 export bodies.
+    // DX12 flavour forwards to a common implementation with this pinned.
+    //
+    //   [D] GFSDK_Aftermath_DX11_* pass 0, GFSDK_Aftermath_DX12_* pass 1.
+    // -------------------------------------------------------------------------
     enum Api : uint32_t
     {
-        Api_D3D11 = 0,      // [D] GFSDK_Aftermath_DX11_* pass 0
-        Api_D3D12 = 1       // [D] GFSDK_Aftermath_DX12_* pass 1
+        Api_D3D11 = 0,
+        Api_D3D12 = 1
     };
-
-    extern uint32_t g_oneTimeInitState;     // [D] 0x18002029C
-    extern void*    g_pDevice;              // [D] 0x1800202A0
-    extern uint32_t g_featureFlags;         // [D] 0x1800202A8
-    extern bool     g_initialized;          // [D] 0x1800202AC
-
-    // Which flavour of API the stored device belongs to.
-    //
-    // [I] GFSDK_Aftermath_GetDeviceStatus() and
-    //     GFSDK_Aftermath_GetPageFaultInformation() take no context handle and
-    //     therefore have no per-call API selector, yet they must still choose
-    //     between the D3D11 and the D3D12 driver interface.  The selector has to
-    //     come from somewhere in the image's .data section; the location was not
-    //     pinned down during the recovery pass, so it is modelled as its own
-    //     global here.  See docs/ANALYSIS_NOTES.md, "Open questions", item 3.
-    extern Api      g_activeApi;
-
 }
 
 // -----------------------------------------------------------------------------
-// Context handle
+// Context handle.
 //
-//   GFSDK_Aftermath_DX11/DX12_CreateContextHandle() heap-allocates a 0x18 byte
-//   object and returns it as the opaque GFSDK_Aftermath_ContextHandle:
+//   CreateContextHandle() heap-allocates 0x18 bytes.  The recovered stores are
+//   [D]:
 //
-//     [D] operator new(0x18)
-//     [D] *(uint32_t*)(handle + 4)  = api;        // 0 = D3D11, 1 = D3D12
-//     [D] *(void**)(handle + 8)     = pContext;   // ID3D11DeviceContext* / ID3D12CommandList*
-//     [D] *(void**)(handle + 16)    = nullptr;    // driver side state
+//       handle = operator new(0x18);
+//       *handle           = 0;                      // 8 bytes at +0
+//       handle[2]         = 0;                      // 8 bytes at +16
+//       *(uint32_t*)(handle + 4) = api;             // +4, upper half of the
+//                                                   // zeroed qword
+//       handle[1]         = pContext;               // +8
+//       handle[2]         = 0;
+//       Attach(api, pContext, &handle[2]);          // driver handle -> +16
 //
-//   GFSDK_Aftermath_ReleaseContextHandle() frees the object after checking the
-//   initialized flag, so the driver side state at +16 (if any) must be owned by
-//   the driver and not by this object.  [I]
+//   So +0 and +4 are one zeroed 64-bit slot whose upper half is then overwritten
+//   by the API selector, and +16 is the DRIVER HANDLE returned by the attach
+//   call.  Reproduction of the original's deliberate double-store of handle[2]
+//   would be pointless, so +16 is simply left for Attach() to fill.
 //
-//   The field at +0 is never read by any of the recovered entry points.  It is
-//   carried here so that the allocation keeps its original size and so that the
-//   two uint32_t fields land on the offsets the disassembly uses.
+//   SetEventMarker() and GetData() dispatch on `api` at +4 and pass the driver
+//   handle at +16; nothing ever reads +0.
 // -----------------------------------------------------------------------------
 struct GFSDK_Aftermath_ContextHandleImpl
 {
-    uint32_t reserved0;      // [D] offset 0, never dereferenced by this build
-    uint32_t api;            // [D] offset 4, aftermath::Api selector
-    void*    pContext;       // [D] offset 8, D3D11 device context / D3D12 command list
-    void*    pDriverState;   // [D] offset 16, owned by the driver interface
+    uint32_t reserved0;      // [D] +0  first half of the zeroed qword; never read
+    uint32_t api;            // [D] +4  aftermath::Api selector
+    void*    pD3DObject;     // [D] +8  ID3D11DeviceContext* / ID3D12CommandList*
+    void*    pDriverHandle;  // [D] +16 driver handle from the Attach call
 };
 
 // -----------------------------------------------------------------------------
 // Implementation entry points.
-//
-//   These are the four internal functions that the exported entry points
-//   forward to.  Their signatures are the ones recovered from the listing, with
-//   the API selector hoisted into the first parameter.
-//
-//     [D] Initialize          <- GFSDK_Aftermath_DX11/DX12_Initialize
-//     [D] CreateContextHandle <- GFSDK_Aftermath_DX11/DX12_CreateContextHandle
-//     [D] SetEventMarker      <- dispatch on handle->api
-//     [D] GetData             <- dispatch on handle->api, per context
 // -----------------------------------------------------------------------------
 namespace aftermath
 {
+    // The shared implementations behind the DX11 and DX12 export pairs.
     GFSDK_Aftermath_Result Initialize(
         Api                          api,
         GFSDK_Aftermath_Version      version,
@@ -155,34 +179,23 @@ namespace aftermath
     GFSDK_Aftermath_Result GetPageFaultInformation(
         GFSDK_Aftermath_PageFaultInformation* pPageFaultInfo);
 
-    // -------------------------------------------------------------------------
-    // ReleaseContextHandle
-    //
-    //   No API selector and no dispatch: the handle owns its own storage.
-    // -------------------------------------------------------------------------
     GFSDK_Aftermath_Result ReleaseContextHandle(
         GFSDK_Aftermath_ContextHandle handle);
 
-    // -------------------------------------------------------------------------
-    // Shutdown
-    //
-    //   Called from the DLL's detach path.  Resets the library state and drops
-    //   the cached driver interfaces.
-    // -------------------------------------------------------------------------
+    // Called from the module detach path.  Not part of the original binary.
     void Shutdown();
+
+#ifdef AFTERMATH_TEST_BUILD
+    // Host-test helper: clears the Initialize() guard, which the original sets
+    // once and never resets, so that a test binary can run more than one
+    // Initialize() scenario.
+    void TestResetInitializeGuard();
+#endif
 }
 
 // -----------------------------------------------------------------------------
 // Result code helpers.
-//
-//   Several recovered call sites build a failure code by adding an offset to
-//   0xBAD00000 rather than by referencing the enumerator, which is why the
-//   listing shows negative immediates such as -0x452FFFF1.  The helpers below
-//   make those sites readable again.
 // -----------------------------------------------------------------------------
-#define AFTERMATH_FAIL(code) \
-    ((GFSDK_Aftermath_Result)(0xBAD00000u + (uint32_t)(code)))
-
 static inline bool AftermathSucceeded(GFSDK_Aftermath_Result result)
 {
     return result == GFSDK_Aftermath_Result_Success;

@@ -6,7 +6,9 @@ DLL project.
 
 The decompiled listing has been reconciled and split into clean `.h` / `.cpp`
 files: no `BYTEn`/`LOBYTE` macros, no `DAT_`/`FUN_`/`data_` placeholders, no
-`__fastcall` noise and no `_QWORD`/`__int64` aliases remain in the build.
+`__fastcall` noise and no `_QWORD`/`__int64` aliases remain in the build. The
+addresses and symbol names of the original are kept, but only in comments, where
+they serve as the provenance for each recovered global and id.
 
 ## Layout
 
@@ -20,7 +22,7 @@ include/
 
 src/
   aftermath_internal.h         internal declarations, context handle layout
-  aftermath_globals.cpp        the four mutable globals
+  aftermath_globals.cpp        the five mutable globals
   aftermath_core.cpp           the real implementations
   aftermath_exports.cpp        the nine exported entry points
   dllmain.cpp                  module lifetime + CRT scaffolding
@@ -35,7 +37,11 @@ build/
   GFSDK_Aftermath.vcxproj      v143, x64, /MT static CRT, exports.def
 
 tests/
-  host_smoke_test.cpp          87-check behavioural test (host buildable)
+  host_smoke_test.cpp          161-check behavioural test (host buildable)
+  public_headers_c_compat.c    the public headers must also compile as C99
+  check_exports.sh             exports.def vs source, and the recovered order
+  check_artifacts.sh           no decompiler identifier outside a comment
+  windows_shim/windows.h       tiny windows.h stand-in for the `wincheck` target
 
 docs/
   ANALYSIS_NOTES.md            provenance for every recovered value + open questions
@@ -53,11 +59,19 @@ Output: `bin\x64\Release\GFSDK_Aftermath_Lib.x64.dll`. Verify the export table
 with `dumpbin /exports`.
 
 **Any host (verification only)** — compiles every translation unit with
-`-Wall -Wextra -Werror` and runs the behavioural test:
+`-Wall -Wextra -Werror` and runs four gates:
 
 ```
 make -f Makefile.host test
 ```
+
+| Target | What it proves |
+|---|---|
+| `test` (default) | 161 behavioural checks against stubbed driver entry points |
+| `c-compat` | the public headers compile as C99 *and* C++17 |
+| `wincheck` | the `#ifndef AFTERMATH_TEST_BUILD` branches — the loader and `DllMain`, i.e. what MSVC actually compiles — type-check against `tests/windows_shim/windows.h` |
+| `artifacts` | no decompiler identifier survives outside a comment |
+| `exports` | `exports.def` matches the source exactly, and the nine names sort into the export-table indices seen in the listing |
 
 This cannot produce the DLL — that needs MSVC, the Windows loader and
 `nvapi64.dll`. It validates the reconstructed *logic*, which is the part worth
@@ -74,9 +88,18 @@ Every non-obvious constant carries a provenance tag in the source:
 **`docs/ANALYSIS_NOTES.md` is the important file.** It records the recovered
 result-code table, the state layout, the device-status translation, the
 `0xBAD0`-prefix rule that distinguishes a public result from a driver-internal
-status, and ten open questions with the exact location of each in the source.
+status, the ten corrections the listing forced on the first reconstruction, and
+the remaining open questions with the exact location of each in the source.
 
-Two things worth knowing before reading the code:
+Three things worth knowing before reading the code:
+
+* `Initialize()` contains a latch that makes a *second* call report success
+  without doing anything after a first call fails. It is not a bug in this
+  reconstruction — it is what the binary does, and the test asserts it. See
+  `docs/ANALYSIS_NOTES.md` §4.
+* The recovered `DllMain` is literally `return TRUE;`. There is no teardown
+  routine and no driver shutdown call anywhere in the image; the
+  `aftermath::Shutdown()` in this tree exists for the host test.
 
 * The `_0` suffixes on several decompiled function names
   (`GFSDK_Aftermath_GetData_0`) are **analysis-database artifacts**, not export

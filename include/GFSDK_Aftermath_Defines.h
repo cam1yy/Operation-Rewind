@@ -13,7 +13,7 @@
 //
 //  Recovered evidence for the version of the SDK that this DLL implements:
 //     * GFSDK_Aftermath_DX11/DX12_Initialize() compares the version argument
-//       against the immediate value 19 (0x13) and returns FAIL_ApiError
+//       against the immediate value 19 (0x13) and returns FAIL_VersionMismatch
 //       otherwise  -> GFSDK_Aftermath_Version_API == 0x13.
 //     * Feature flags: the DLL only ever tests bit 0 (markers) and bit 1
 //       (resource tracking).  See GFSDK_Aftermath_FeatureFlags below.
@@ -36,6 +36,15 @@
 #  define GFSDK_AFTERMATH_EXTERN_C
 #endif
 
+// Calling convention for the private NVAPI entry points.  x64 has a single
+// convention so this is a no-op in practice; it is spelled out because the
+// driver side interfaces are C linkage.  GCC/Clang do not have the keyword.
+#if defined(_MSC_VER)
+#  define AFTERMATH_CDECL __cdecl
+#else
+#  define AFTERMATH_CDECL
+#endif
+
 #if defined(_MSC_VER)
 #  define GFSDK_AFTERMATH_CALL __stdcall
 #  if defined(GFSDK_AFTERMATH_EXPORTS)
@@ -54,11 +63,12 @@
 // API version.
 //
 //   GFSDK_Aftermath_Initialize() rejects any other value with
-//   GFSDK_Aftermath_Result_FAIL_ApiError.  Recovered from sub_180004690, the
+//   GFSDK_Aftermath_Result_FAIL_VersionMismatch -- NOT FAIL_ApiError, which is
+//   reserved for an unknown API index.  Recovered from sub_180004690, the
 //   shared implementation behind both the DX11 and the DX12 export:
 //
 //     if ( version != 19 )      // 19 == 0x13
-//         return 0xBAD00006;    // GFSDK_Aftermath_Result_FAIL_ApiError
+//         return 0xBAD00001;    // GFSDK_Aftermath_Result_FAIL_VersionMismatch
 // -----------------------------------------------------------------------------
 #define GFSDK_Aftermath_Version_API 0x13
 

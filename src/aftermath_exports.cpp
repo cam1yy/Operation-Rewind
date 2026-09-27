@@ -9,6 +9,29 @@
 //  if it is not in this file, it is not exported.
 //
 //  ---------------------------------------------------------------------------
+//  A note on the export ordering
+//
+//  Several functions in the listing carry an adjacent constant -- 1 for DX11
+//  CreateContextHandle, 2 for DX11 Initialize, 3 for DX12 CreateContextHandle,
+//  4 for DX12 Initialize and 8 for ReleaseContextHandle.  Those are not
+//  ordinals in the API, they are indices into the DLL's sorted export name
+//  table, which is exactly what the linker emits for a .def file.  Sorting the
+//  nine export names puts the eight known functions at the indices above and
+//  fills in the rest:
+//
+//      1  GFSDK_Aftermath_DX11_CreateContextHandle
+//      2  GFSDK_Aftermath_DX11_Initialize
+//      3  GFSDK_Aftermath_DX12_CreateContextHandle
+//      4  GFSDK_Aftermath_DX12_Initialize
+//      5  GFSDK_Aftermath_GetData
+//      6  GFSDK_Aftermath_GetDeviceStatus
+//      7  GFSDK_Aftermath_GetPageFaultInformation
+//      8  GFSDK_Aftermath_ReleaseContextHandle
+//      9  GFSDK_Aftermath_SetEventMarker
+//
+//  Eight of nine indices are confirmed against the listing, which is why the
+//  export list below can be treated as complete.
+//  ---------------------------------------------------------------------------
 //  A note on the function names
 //
 //  The disassembler presents several of these as GFSDK_Aftermath_GetData_0,
