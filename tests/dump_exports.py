@@ -7,6 +7,7 @@ Prints the export table and checks it against the nine names/ordinals of the ori
 binary.  Exits non-zero on any mismatch.  Pure stdlib PE parsing, so it runs on any host.
 """
 
+import os
 import struct
 import sys
 
@@ -89,11 +90,21 @@ def read_exports(path):
     }
 
 
+def annotate(message):
+    """Emit a GitHub Actions error annotation (readable without the log archive)."""
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print("::error::%s" % message.replace("\n", " "))
+
+
 def main():
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
 
-    info = read_exports(sys.argv[1])
+    try:
+        info = read_exports(sys.argv[1])
+    except SystemExit as error:
+        annotate("%s: %s" % (sys.argv[1], error))
+        raise
 
     print("machine           : 0x%04X%s" % (info["machine"], "  (x64)" if info["machine"] == 0x8664 else ""))
     print("PE32+             : %s" % info["pe32plus"])
@@ -137,6 +148,13 @@ def main():
     print()
     print("export table matches the original binary" if failures == 0
           else "%d mismatch(es)" % failures)
+
+    if failures:
+        annotate("%s: %d mismatch(es).  table = %s" % (
+            sys.argv[1],
+            failures,
+            " | ".join("@%d %s 0x%X" % (o, info["exports"][o][0], info["exports"][o][1])
+                       for o in sorted(info["exports"]))))
     return 1 if failures else 0
 
 
