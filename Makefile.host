@@ -1,0 +1,72 @@
+# =============================================================================
+#  Makefile.host
+# -----------------------------------------------------------------------------
+#  Host-side verification build.
+#
+#  This does NOT produce the DLL -- it cannot, because the DLL needs MSVC, the
+#  Windows loader and nvapi64.dll.  What it does is compile every translation
+#  unit with -Wall -Wextra -Werror and then run the behavioural smoke test
+#  against stubbed driver entry points.
+#
+#  The only thing the test build changes about the sources is a single define:
+#  AFTERMATH_TEST_BUILD replaces the windows.h dependency in the loader and in
+#  DllMain with a hook the test can drive.  No library logic is compiled out.
+#
+#  Usage:
+#      make -f Makefile.host          # compile and link the test
+#      make -f Makefile.host test     # compile, link and run
+#      make -f Makefile.host clean
+# =============================================================================
+
+CXX      ?= g++
+CXXFLAGS ?= -std=c++17 -DAFTERMATH_TEST_BUILD -Iinclude -Isrc \
+            -Wall -Wextra -Werror -Wno-unused-parameter -g -O1
+LDFLAGS  ?=
+
+OBJDIR   := build/hostobj
+BIN      := build/host_smoke_test
+CC       ?= gcc
+
+# The public headers must be usable from plain C as well as C++ -- the real
+# Aftermath headers are, and client code compiled as C is common.
+CCOMPAT_SRC := tests/public_headers_c_compat.c
+CCOMPAT_OBJ := build/hostobj/c_compat_check.o
+
+LIB_SRCS := \
+    src/aftermath_globals.cpp \
+    src/aftermath_core.cpp \
+    src/aftermath_exports.cpp \
+    src/dllmain.cpp \
+    src/nvapi/nvapi_loader.cpp \
+    src/nvapi/aftermath_driver.cpp
+
+TEST_SRCS := tests/host_smoke_test.cpp
+
+LIB_OBJS  := $(patsubst %.cpp,$(OBJDIR)/%.o,$(LIB_SRCS))
+TEST_OBJS := $(patsubst %.cpp,$(OBJDIR)/%.o,$(TEST_SRCS))
+ALL_OBJS  := $(LIB_OBJS) $(TEST_OBJS)
+
+.PHONY: all test clean c-compat
+
+all: $(BIN)
+
+$(BIN): $(ALL_OBJS)
+	@mkdir -p $(dir $@)
+	$(CXX) $(ALL_OBJS) -o $@ $(LDFLAGS)
+
+$(OBJDIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+c-compat: $(CCOMPAT_OBJ)
+
+$(CCOMPAT_OBJ): $(CCOMPAT_SRC)
+	@mkdir -p $(dir $@)
+	$(CC) -std=c99 -Wall -Wextra -Werror -Iinclude -c $< -o $@
+	@echo "  ok    public headers compile as C99"
+
+test: $(BIN) c-compat
+	@./$(BIN)
+
+clean:
+	rm -rf build/hostobj build/host_smoke_test

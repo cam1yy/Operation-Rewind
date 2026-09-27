@@ -1,0 +1,24 @@
+# Build output
+build/obj/
+build/hostobj/
+build/host_smoke_test
+bin/
+obj/
+*.obj
+*.o
+*.dll
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.idb
+*.log
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.suo
+*.sdf
+
+# Editor
+*~
