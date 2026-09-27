@@ -1,0 +1,26 @@
+;
+; exports.def -- export table of GFSDK_Aftermath_Lib.x64.dll
+;
+; Ordinals 1, 2, 3, 4 and 8 are the ones the Ghidra listing shows next to the thunks at
+; 0x5590, 0x5570, 0x5580, 0x5550 and 0x55A0.  The remaining four names slot into 5, 6, 7
+; and 9, which is exactly what the linker assigns when a .def file lists every export
+; without an explicit ordinal: MSVC numbers them in ASCII order of the *decorated* name.
+; The full alphabetical sequence below reproduces the original table one for one.
+;
+; x64 has a single calling convention, so no name decoration is involved: the exported
+; names are the plain C identifiers.  (A 32 bit build of the same sources would export
+; _GFSDK_Aftermath_GetData and friends with __cdecl decoration, hence the explicit
+; ordinals here -- they keep the table stable whatever the target.)
+;
+LIBRARY "GFSDK_Aftermath_Lib.x64.dll"
+
+EXPORTS
+    GFSDK_Aftermath_DX11_CreateContextHandle    @1
+    GFSDK_Aftermath_DX11_Initialize             @2
+    GFSDK_Aftermath_DX12_CreateContextHandle    @3
+    GFSDK_Aftermath_DX12_Initialize             @4
+    GFSDK_Aftermath_GetData                     @5
+    GFSDK_Aftermath_GetDeviceStatus             @6
+    GFSDK_Aftermath_GetPageFaultInformation     @7
+    GFSDK_Aftermath_ReleaseContextHandle        @8
+    GFSDK_Aftermath_SetEventMarker              @9

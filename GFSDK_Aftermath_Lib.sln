@@ -1,0 +1,25 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GFSDK_Aftermath_Lib", "GFSDK_Aftermath_Lib.vcxproj", "{8F3C1D4A-7B2E-4E6A-9D2F-6A1C0B5E7A11}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8F3C1D4A-7B2E-4E6A-9D2F-6A1C0B5E7A11}.Debug|x64.ActiveCfg = Debug|x64
+		{8F3C1D4A-7B2E-4E6A-9D2F-6A1C0B5E7A11}.Debug|x64.Build.0 = Debug|x64
+		{8F3C1D4A-7B2E-4E6A-9D2F-6A1C0B5E7A11}.Release|x64.ActiveCfg = Release|x64
+		{8F3C1D4A-7B2E-4E6A-9D2F-6A1C0B5E7A11}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {2C7A1B65-9F0D-4B52-9F3B-2F1C5D1A77E2}
+	EndGlobalSection
+EndGlobal

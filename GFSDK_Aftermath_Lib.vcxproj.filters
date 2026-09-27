@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\loader">
+      <UniqueIdentifier>{1B0E0A21-5B2C-4E55-9E26-4E6F1F0F1A01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\nvapi">
+      <UniqueIdentifier>{1B0E0A21-5B2C-4E55-9E26-4E6F1F0F1A02}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\compat">
+      <UniqueIdentifier>{1B0E0A21-5B2C-4E55-9E26-4E6F1F0F1A03}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\loader">
+      <UniqueIdentifier>{1B0E0A21-5B2C-4E55-9E26-4E6F1F0F1A04}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\nvapi">
+      <UniqueIdentifier>{1B0E0A21-5B2C-4E55-9E26-4E6F1F0F1A05}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Public API">
+      <UniqueIdentifier>{1B0E0A21-5B2C-4E55-9E26-4E6F1F0F1A06}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Documentation">
+      <UniqueIdentifier>{1B0E0A21-5B2C-4E55-9E26-4E6F1F0F1A07}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="src\aftermath_api.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\dllmain.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\loader\nv_driver_store.cpp"><Filter>Source Files\loader</Filter></ClCompile>
+    <ClCompile Include="src\loader\nv_module_loader.cpp"><Filter>Source Files\loader</Filter></ClCompile>
+    <ClCompile Include="src\loader\nv_path_utils.cpp"><Filter>Source Files\loader</Filter></ClCompile>
+    <ClCompile Include="src\loader\nv_strsafe.cpp"><Filter>Source Files\loader</Filter></ClCompile>
+    <ClCompile Include="src\loader\nv_system_api.cpp"><Filter>Source Files\loader</Filter></ClCompile>
+    <ClCompile Include="src\nvapi\nvapi_bridge.cpp"><Filter>Source Files\nvapi</Filter></ClCompile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClInclude Include="include\GFSDK_Aftermath.h"><Filter>Public API</Filter></ClInclude>
+    <ClInclude Include="src\aftermath_internal.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\compat\com_min.h"><Filter>Header Files\compat</Filter></ClInclude>
+    <ClInclude Include="src\compat\ida_defs.h"><Filter>Header Files\compat</Filter></ClInclude>
+    <ClInclude Include="src\loader\nv_driver_store.h"><Filter>Header Files\loader</Filter></ClInclude>
+    <ClInclude Include="src\loader\nv_module_loader.h"><Filter>Header Files\loader</Filter></ClInclude>
+    <ClInclude Include="src\loader\nv_path_utils.h"><Filter>Header Files\loader</Filter></ClInclude>
+    <ClInclude Include="src\loader\nv_strsafe.h"><Filter>Header Files\loader</Filter></ClInclude>
+    <ClInclude Include="src\loader\nv_system_api.h"><Filter>Header Files\loader</Filter></ClInclude>
+    <ClInclude Include="src\nvapi\nvapi_bridge.h"><Filter>Header Files\nvapi</Filter></ClInclude>
+    <ClInclude Include="src\nvapi\nvapi_types.h"><Filter>Header Files\nvapi</Filter></ClInclude>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="exports.def"><Filter>Source Files</Filter></None>
+    <None Include="README.md"><Filter>Documentation</Filter></None>
+    <None Include="docs\RECONSTRUCTION.md"><Filter>Documentation</Filter></None>
+    <None Include="docs\SYMBOL_MAP.md"><Filter>Documentation</Filter></None>
+  </ItemGroup>
+</Project>

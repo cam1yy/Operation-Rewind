@@ -1,0 +1,35 @@
+# Visual Studio / MSBuild
+.vs/
+[Dd]ebug/
+[Rr]elease/
+x64/
+Win32/
+*.user
+*.suo
+*.aps
+*.VC.db
+*.VC.opendb
+ipch/
+
+# Build output
+build/
+out/
+bin/
+obj/
+*.obj
+*.lib
+*.exp
+*.dll
+*.pdb
+*.ilk
+*.idb
+*.log
+*.tlog
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+
+# Local syntax-check artefacts
+tests/.syntax-check/
