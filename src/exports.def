@@ -1,0 +1,45 @@
+; ============================================================================
+;  exports.def
+; ----------------------------------------------------------------------------
+;  Export table of GFSDK_Aftermath_Lib.x64.dll.
+;
+;  All nine entry points use the x64 calling convention, which has no name
+;  decoration: the export names are exactly the symbol names below, with no
+;  leading underscore and no "@n" arity suffix.
+;
+;  This file is the authoritative list.  Whatever is not here is not exported.
+;  It can be verified against the rebuilt binary with:
+;
+;      dumpbin /exports GFSDK_Aftermath_Lib.x64.dll
+;
+;  ----------------------------------------------------------------------------
+;  A note on the "_0" suffixes:
+;
+;  The disassembler labels several of these functions with a trailing "_0",
+;  e.g. GFSDK_Aftermath_GetData_0.  That suffix is database bookkeeping, not
+;  part of the binary: IDA appends an ordinal when the name it wants to assign
+;  is already taken.  The string table of the original DLL contains the nine
+;  names below and nothing resembling a "_0" name.
+;  ----------------------------------------------------------------------------
+; ============================================================================
+
+LIBRARY GFSDK_Aftermath_Lib.x64
+
+EXPORTS
+
+    ; --------------------------- Initialization -----------------------------
+    GFSDK_Aftermath_DX11_Initialize
+    GFSDK_Aftermath_DX12_Initialize
+
+    ; --------------------------- Context handles ----------------------------
+    GFSDK_Aftermath_DX11_CreateContextHandle
+    GFSDK_Aftermath_DX12_CreateContextHandle
+    GFSDK_Aftermath_ReleaseContextHandle
+
+    ; --------------------------- Marker data --------------------------------
+    GFSDK_Aftermath_SetEventMarker
+    GFSDK_Aftermath_GetData
+
+    ; --------------------------- Device queries -----------------------------
+    GFSDK_Aftermath_GetDeviceStatus
+    GFSDK_Aftermath_GetPageFaultInformation
