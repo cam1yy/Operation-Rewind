@@ -46,8 +46,10 @@ jobs:
             exit 1
           }
 
+      # --check-layout: the .vcxproj uses the same code generation settings as the
+      # shipping DLL (/O2 /Gy /GL /OPT:ICF), so it also reproduces its function order.
       - name: Verify the export table of the solution build
-        run: python tests/dump_exports.py build/x64/Release/GFSDK_Aftermath_Lib.x64.dll
+        run: python tests/dump_exports.py --check-layout build/x64/Release/GFSDK_Aftermath_Lib.x64.dll
 
       # No hardcoded generator: CMake picks the newest Visual Studio on the image, which
       # keeps this working as the runner image moves past VS 2022.  The .sln build above
@@ -73,6 +75,8 @@ jobs:
             exit 1
           }
 
+      # No --check-layout here: CMake's stock Release flags emit the COMDATs in
+      # export-name order, which is a linker artefact and not a source-level difference.
       - name: Verify the export table of the CMake build
         run: python tests/dump_exports.py cmake-build-ci/Release/GFSDK_Aftermath_Lib.x64.dll
 

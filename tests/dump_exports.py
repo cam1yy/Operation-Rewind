@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """Dump and verify the export directory of a built GFSDK_Aftermath_Lib.x64.dll.
 
-    python3 tests/dump_exports.py <path-to-dll>
+    python3 tests/dump_exports.py [--check-layout] <path-to-dll>
 
 Prints the export table and checks it against the nine names/ordinals of the original
 binary.  Exits non-zero on any mismatch.  Pure stdlib PE parsing, so it runs on any host.
+
+--check-layout additionally requires the exported functions to sit in the same relative
+order as in the original image.  That holds for builds whose code generation settings
+match the shipping DLL's (/O2 /Gy /GL, MSBuild on GFSDK_Aftermath_Lib.vcxproj, and the
+mingw cross build), but it is a property of the linker settings rather than of the
+sources: CMake's stock Release flags, for instance, emit the COMDATs in export-name
+order.  Hence it is opt-in.
 """
 
 import os
@@ -97,13 +104,17 @@ def annotate(message):
 
 
 def main():
-    if len(sys.argv) != 2:
+    args = sys.argv[1:]
+    check_layout = "--check-layout" in args
+    args = [a for a in args if a != "--check-layout"]
+    if len(args) != 1:
         raise SystemExit(__doc__)
+    path = args[0]
 
     try:
-        info = read_exports(sys.argv[1])
-    except SystemExit as error:
-        annotate("%s: %s" % (sys.argv[1], error))
+        info = read_exports(path)
+    except (SystemExit, OSError) as error:
+        annotate("%s: %s" % (path, error))
         raise
 
     print("machine           : 0x%04X%s" % (info["machine"], "  (x64)" if info["machine"] == 0x8664 else ""))
@@ -131,11 +142,14 @@ def main():
     actual_order = [o for o in sorted(info["exports"], key=lambda o: info["exports"][o][1])
                     if o in expected_order]
     layout_ok = actual_order == expected_order
-    failures += not layout_ok
+    if check_layout:
+        failures += not layout_ok
     print("  [%s] function layout matches the original order (@%s)"
-          % ("PASS" if layout_ok else "FAIL", ", @".join(str(o) for o in expected_order)))
+          % ("PASS" if layout_ok else ("FAIL" if check_layout else "INFO"),
+             ", @".join(str(o) for o in expected_order)))
     if not layout_ok:
-        print("         built order: @%s" % ", @".join(str(o) for o in actual_order))
+        print("         built order: @%s%s" % (", @".join(str(o) for o in actual_order),
+                                               "" if check_layout else "   (informational)"))
 
     unexpected = sorted(o for o in info["exports"] if o > len(EXPECTED))
     if unexpected:
@@ -151,7 +165,7 @@ def main():
 
     if failures:
         annotate("%s: %d mismatch(es).  table = %s" % (
-            sys.argv[1],
+            path,
             failures,
             " | ".join("@%d %s 0x%X" % (o, info["exports"][o][0], info["exports"][o][1])
                        for o in sorted(info["exports"]))))

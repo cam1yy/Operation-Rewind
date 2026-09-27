@@ -97,4 +97,4 @@ else
 fi
 
 echo
-python3 "$ROOT/tests/dump_exports.py" "$DLL"
+python3 "$ROOT/tests/dump_exports.py" --check-layout "$DLL"
