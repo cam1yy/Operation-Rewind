@@ -28,26 +28,63 @@ jobs:
 
       - name: Build the Visual Studio solution (Release|x64)
         shell: pwsh
-        run: '& "$env:MSBUILD" GFSDK_Aftermath_Lib.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal'
+        run: |
+          $out = & "$env:MSBUILD" GFSDK_Aftermath_Lib.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal 2>&1
+          $out | ForEach-Object { Write-Host $_ }
+          if ($LASTEXITCODE -ne 0) {
+            $out | Select-Object -Last 25 | ForEach-Object { Write-Host "::error::$_" }
+            exit 1
+          }
 
       - name: Build the Visual Studio solution (Debug|x64)
         shell: pwsh
-        run: '& "$env:MSBUILD" GFSDK_Aftermath_Lib.sln /p:Configuration=Debug /p:Platform=x64 /m /v:minimal'
+        run: |
+          $out = & "$env:MSBUILD" GFSDK_Aftermath_Lib.sln /p:Configuration=Debug /p:Platform=x64 /m /v:minimal 2>&1
+          $out | ForEach-Object { Write-Host $_ }
+          if ($LASTEXITCODE -ne 0) {
+            $out | Select-Object -Last 25 | ForEach-Object { Write-Host "::error::$_" }
+            exit 1
+          }
 
       - name: Verify the export table of the solution build
         run: python tests/dump_exports.py build/x64/Release/GFSDK_Aftermath_Lib.x64.dll
 
+      # No hardcoded generator: CMake picks the newest Visual Studio on the image, which
+      # keeps this working as the runner image moves past VS 2022.  The .sln build above
+      # is the one that pins the v143 toolset.
       - name: Configure with CMake
-        run: cmake -S . -B cmake-build-ci -G "Visual Studio 17 2022" -A x64 -DGFSDK_AFTERMATH_BUILD_TESTS=ON
+        shell: pwsh
+        run: |
+          cmake --version
+          $out = & cmake -S . -B cmake-build-ci -A x64 -DGFSDK_AFTERMATH_BUILD_TESTS=ON 2>&1
+          $out | ForEach-Object { Write-Host $_ }
+          if ($LASTEXITCODE -ne 0) {
+            $out | Select-Object -Last 25 | ForEach-Object { Write-Host "::error::$_" }
+            exit 1
+          }
 
       - name: Build with CMake (Release)
-        run: cmake --build cmake-build-ci --config Release
+        shell: pwsh
+        run: |
+          $out = & cmake --build cmake-build-ci --config Release 2>&1
+          $out | ForEach-Object { Write-Host $_ }
+          if ($LASTEXITCODE -ne 0) {
+            $out | Select-Object -Last 25 | ForEach-Object { Write-Host "::error::$_" }
+            exit 1
+          }
 
       - name: Verify the export table of the CMake build
         run: python tests/dump_exports.py cmake-build-ci/Release/GFSDK_Aftermath_Lib.x64.dll
 
       - name: Smoke test (exports + pre-initialisation behaviour)
-        run: ./cmake-build-ci/Release/smoke_test.exe cmake-build-ci/Release/GFSDK_Aftermath_Lib.x64.dll
+        shell: pwsh
+        run: |
+          $out = & ./cmake-build-ci/Release/smoke_test.exe cmake-build-ci/Release/GFSDK_Aftermath_Lib.x64.dll 2>&1
+          $out | ForEach-Object { Write-Host $_ }
+          if ($LASTEXITCODE -ne 0) {
+            $out | Select-Object -Last 25 | ForEach-Object { Write-Host "::error::$_" }
+            exit 1
+          }
 
       - name: Report the import table
         shell: pwsh
