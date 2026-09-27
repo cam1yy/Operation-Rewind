@@ -22,8 +22,10 @@ src/compat/ida_defs.h            IDA <defs.h> replacements for MSVC (for further
 
 docs/RECONSTRUCTION.md           method, type recovery, quirks kept, deviations, open items
 docs/SYMBOL_MAP.md               every sub_XXXXXXXX and global -> name -> file
+tests/build_mingw.sh             non-Windows: real cross build + export-table verification
+tests/dump_exports.py            parses a built DLL's export directory and checks it
 tests/smoke_test.cpp             Windows: verifies the export table and pre-init behaviour
-tests/syntax_check.sh            non-Windows: type checks every TU against stub Win32 headers
+tests/syntax_check.sh            non-Windows: type checks every TU with no toolchain at all
 ```
 
 ## What the library does
@@ -91,22 +93,35 @@ smoke_test.exe build\x64\Release\GFSDK_Aftermath_Lib.x64.dll
 verifies that all nine exports resolve, that each sits on the expected ordinal, and that
 every entry point reports `FAIL_NotInitialized` before initialisation.
 
-On a machine without a Windows SDK:
+On a machine without a Windows SDK there are two levels of check:
 
 ```
-tests/syntax_check.sh        # g++ -fsyntax-only against tests/win32-shim
+tests/build_mingw.sh     # cross compile + link a real x64 PE, then verify its exports
+tests/syntax_check.sh    # no cross compiler needed: g++ -fsyntax-only + stub headers
 ```
+
+`build_mingw.sh` picks up `x86_64-w64-mingw32-g++`, or any compiler you point `CXX` at
+(`CXX="zig c++ -target x86_64-windows-gnu"`, `CXX="clang++ --target=x86_64-windows-gnu"`).
 
 ## Status
 
-* All 8 translation units and the public header compile warning-free under
-  `g++ -std=c++14 -Wall -Wextra` against the stub Win32 headers, and the public header is
-  additionally valid C89.
-* The MSVC build itself has **not** been exercised here (no Windows SDK in this
-  environment) — that is the one step left to run on a Windows machine.
-* Three `.rdata` constants (two GUIDs and a `DEVPROPKEY`) were inferred from their use
-  because the supplied listings covered `.text` only; they are listed with their evidence
-  in `docs/RECONSTRUCTION.md §7`.
+| Check | Result |
+|---|---|
+| 8 TUs compile against the real Windows headers for an x86_64 target (`-Wall -Wextra`) | clean |
+| Links into an x64 PE (`PE32+`, machine `0x8664`) | yes |
+| Export directory: 9 names, ordinals 1–9, undecorated, module name `GFSDK_Aftermath_Lib.x64.dll` | matches |
+| Exported functions laid out in the same relative order as the original | matches (`@9, @5, @6, @7, @4, @2, @3, @1, @8`) |
+| `sizeof(ContextHandleImpl) == 0x18` | `static_assert`, holds |
+| Public header valid as C89 and self contained | yes |
+| **MSVC v143 build** | **not run here** — no Windows SDK in this environment |
+
+The cross build uses the mingw-w64 headers and CRT, so it does not prove the MSVC build;
+what it does prove is that every Win32 type, constant and signature is used correctly, and
+that the export table comes out identical to the original's.
+
+Three `.rdata` constants (two GUIDs and a `DEVPROPKEY`) were inferred from their use
+because the supplied listings covered `.text` only; they are listed with their evidence in
+`docs/RECONSTRUCTION.md §7`.
 
 ## Scope note
 

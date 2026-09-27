@@ -240,14 +240,45 @@ Two further judgement calls worth reviewing:
 
 | Check | Status |
 |---|---|
-| All 8 translation units + the public header parse cleanly (`-Wall -Wextra`, zero warnings) | done — `tests/syntax_check.sh` |
-| Public header is valid C89 and self contained | done — same script |
+| All 8 translation units compile against the **real** Windows headers (`windows.h`, `setupapi.h`, `devpropdef.h`, `unknwn.h`, `winsvc.h`, `winreg.h`) for an `x86_64-windows` target, `-Wall -Wextra`, zero warnings | done — `tests/build_mingw.sh` |
+| Links into a real x64 PE (`PE32+`, machine `0x8664`) | done |
+| Export directory: nine undecorated names on ordinals 1–9, ordinal base 1, module name `GFSDK_Aftermath_Lib.x64.dll` | done — `tests/dump_exports.py` |
+| Exported functions emitted in the same relative order as the original binary | done — `@9, @5, @6, @7, @4, @2, @3, @1, @8`, i.e. `0x4CC0 < 0x4E40 < 0x51D0 < 0x53D0 < 0x5550 < 0x5570 < 0x5580 < 0x5590 < 0x55A0` |
+| Parses with no toolchain at all (stub headers, `-Wall -Wextra`) | done — `tests/syntax_check.sh` |
+| Public header valid C89 and self contained | done — same script |
 | `sizeof(ContextHandleImpl) == 0x18` | done — `static_assert` |
-| MSVC v143 x64 build | **not run here** — this environment has no Windows SDK; use `GFSDK_Aftermath_Lib.sln` or the CMake build |
-| Export table names + ordinals of the built DLL | run `tests/smoke_test.cpp` against the output |
+| MSVC v143 x64 build | **not run here** — no Windows SDK in this environment; use `GFSDK_Aftermath_Lib.sln` or the CMake build |
 | Behaviour against a real NVIDIA driver | needs hardware |
 
-`tests/syntax_check.sh` type checks the sources against the stub Win32 headers in
-`tests/win32-shim/` (signatures transcribed from the documented Win32 API). It is a
-static check only — it proves the code is well formed C++ and that every API is used with
-the right types, not that it links or runs.
+Two independent checks are provided because they answer different questions:
+
+* `tests/build_mingw.sh` needs a cross compiler (`x86_64-w64-mingw32-g++`, or set
+  `CXX="zig c++ -target x86_64-windows-gnu"`). It compiles against the genuine Win32
+  headers, links, and verifies the produced export table — so it catches wrong argument
+  types, wrong constants, missing `_WIN32_WINNT` gates and export-table mistakes. It does
+  **not** prove the MSVC build: the CRT and a handful of header details differ.
+* `tests/syntax_check.sh` needs nothing but a host C++ compiler and type checks the
+  sources against the stub headers in `tests/win32-shim/`.
+
+Neither is a substitute for building the solution on Windows, which is the one remaining
+step.
+
+### Export-table evidence
+
+```
+ordinal  name                                          rva
+1        GFSDK_Aftermath_DX11_CreateContextHandle      0x00002960
+2        GFSDK_Aftermath_DX11_Initialize               0x000028E0
+3        GFSDK_Aftermath_DX12_CreateContextHandle      0x00002930
+4        GFSDK_Aftermath_DX12_Initialize               0x00002890
+5        GFSDK_Aftermath_GetData                       0x00001C00
+6        GFSDK_Aftermath_GetDeviceStatus               0x00002490
+7        GFSDK_Aftermath_GetPageFaultInformation       0x00002770
+8        GFSDK_Aftermath_ReleaseContextHandle          0x00002990
+9        GFSDK_Aftermath_SetEventMarker                0x00001960
+```
+
+Sorted by address that is `@9, @5, @6, @7, @4, @2, @3, @1, @8` — the same sequence as
+`0x180004CC0 … 0x1800055A0` in the original. The five wrapper thunks are larger here than
+the 0x10-byte ones in the shipping DLL simply because this verification build is not
+compiled with `/O2` tail-call merging.

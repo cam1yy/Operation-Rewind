@@ -248,50 +248,9 @@ GFSDK_Aftermath_Result CreateContextHandle(ApiType apiType,
 } /* namespace aftermath */
 
 /* ====================================================================================== *
- * Exported entry points.
+ * Exported entry points, in the order they appear in the original binary (MSVC emits
+ * functions in source order, so keeping the order makes a future diff trivial).
  * ====================================================================================== */
-
-/* sub_180005570 -- ordinal 2 */
-GFSDK_Aftermath_API GFSDK_Aftermath_DX11_Initialize(GFSDK_Aftermath_Version version,
-                                                    GFSDK_Aftermath_uint32 flags,
-                                                    struct ID3D11Device* const pDx11Device)
-{
-    return aftermath::Initialize(aftermath::kApiTypeDX11, version, flags,
-                                 reinterpret_cast<IUnknown*>(pDx11Device));
-}
-
-/* sub_180005550 -- ordinal 4 */
-GFSDK_Aftermath_API GFSDK_Aftermath_DX12_Initialize(GFSDK_Aftermath_Version version,
-                                                    GFSDK_Aftermath_uint32 flags,
-                                                    struct ID3D12Device* const pDx12Device)
-{
-    return aftermath::Initialize(aftermath::kApiTypeDX12, version, flags,
-                                 reinterpret_cast<IUnknown*>(pDx12Device));
-}
-
-/* sub_180005590 -- ordinal 1 */
-GFSDK_Aftermath_API GFSDK_Aftermath_DX11_CreateContextHandle(struct ID3D11DeviceContext* const pDx11DeviceContext,
-                                                             GFSDK_Aftermath_ContextHandle* pOutContextHandle)
-{
-    return aftermath::CreateContextHandle(aftermath::kApiTypeDX11, pDx11DeviceContext, pOutContextHandle);
-}
-
-/* sub_180005580 -- ordinal 3 */
-GFSDK_Aftermath_API GFSDK_Aftermath_DX12_CreateContextHandle(struct ID3D12CommandList* const pDx12CommandList,
-                                                             GFSDK_Aftermath_ContextHandle* pOutContextHandle)
-{
-    return aftermath::CreateContextHandle(aftermath::kApiTypeDX12, pDx12CommandList, pOutContextHandle);
-}
-
-/* sub_1800055A0 -- ordinal 8
- *
- * The binary allocates with operator new and releases with free(); both end up in the
- * same CRT heap, but the reconstruction uses a matching new/delete pair. */
-GFSDK_Aftermath_API GFSDK_Aftermath_ReleaseContextHandle(const GFSDK_Aftermath_ContextHandle contextHandle)
-{
-    delete reinterpret_cast<aftermath::ContextHandleImpl*>(contextHandle);
-    return GFSDK_Aftermath_Result_Success;
-}
 
 /* sub_180004CC0 -- ordinal 9 */
 GFSDK_Aftermath_API GFSDK_Aftermath_SetEventMarker(const GFSDK_Aftermath_ContextHandle contextHandle,
@@ -502,4 +461,46 @@ GFSDK_Aftermath_API GFSDK_Aftermath_GetPageFaultInformation(GFSDK_Aftermath_Page
     }
 
     return TranslateNvApiStatus(status);
+}
+
+/* sub_180005550 -- ordinal 4 */
+GFSDK_Aftermath_API GFSDK_Aftermath_DX12_Initialize(GFSDK_Aftermath_Version version,
+                                                    GFSDK_Aftermath_uint32 flags,
+                                                    struct ID3D12Device* const pDx12Device)
+{
+    return aftermath::Initialize(aftermath::kApiTypeDX12, version, flags,
+                                 reinterpret_cast<IUnknown*>(pDx12Device));
+}
+
+/* sub_180005570 -- ordinal 2 */
+GFSDK_Aftermath_API GFSDK_Aftermath_DX11_Initialize(GFSDK_Aftermath_Version version,
+                                                    GFSDK_Aftermath_uint32 flags,
+                                                    struct ID3D11Device* const pDx11Device)
+{
+    return aftermath::Initialize(aftermath::kApiTypeDX11, version, flags,
+                                 reinterpret_cast<IUnknown*>(pDx11Device));
+}
+
+/* sub_180005580 -- ordinal 3 */
+GFSDK_Aftermath_API GFSDK_Aftermath_DX12_CreateContextHandle(struct ID3D12CommandList* const pDx12CommandList,
+                                                             GFSDK_Aftermath_ContextHandle* pOutContextHandle)
+{
+    return aftermath::CreateContextHandle(aftermath::kApiTypeDX12, pDx12CommandList, pOutContextHandle);
+}
+
+/* sub_180005590 -- ordinal 1 */
+GFSDK_Aftermath_API GFSDK_Aftermath_DX11_CreateContextHandle(struct ID3D11DeviceContext* const pDx11DeviceContext,
+                                                             GFSDK_Aftermath_ContextHandle* pOutContextHandle)
+{
+    return aftermath::CreateContextHandle(aftermath::kApiTypeDX11, pDx11DeviceContext, pOutContextHandle);
+}
+
+/* sub_1800055A0 -- ordinal 8
+ *
+ * The binary allocates with operator new and releases with free(); both end up in the
+ * same CRT heap, but the reconstruction uses a matching new/delete pair. */
+GFSDK_Aftermath_API GFSDK_Aftermath_ReleaseContextHandle(const GFSDK_Aftermath_ContextHandle contextHandle)
+{
+    delete reinterpret_cast<aftermath::ContextHandleImpl*>(contextHandle);
+    return GFSDK_Aftermath_Result_Success;
 }
